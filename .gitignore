@@ -1,0 +1,10 @@
+# Generated output — regenerable from the Markdown, never commit it.
+# Each build is ~1.8 MB; committing them would bloat the repo history fast.
+build/
+
+# Local Python environment created by build_pdf.sh on first run
+.venv/
+__pycache__/
+
+# macOS
+.DS_Store
