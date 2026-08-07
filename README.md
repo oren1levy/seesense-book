@@ -43,6 +43,7 @@ Everyone works from this repo, so everyone always has everyone else's latest tex
 | `13_ch7_references.md` | 7 — References |
 | `14_appendices.md` | Appendices A–D |
 | `TODO_NUMBERS.md` | **Every number, figure and fact still missing.** Read before submitting |
+| `AMBIGUOUS.md` | **Contradictions and open decisions** found when reconciling the book against the code. Read with the TODO |
 | `figures/` | Images referenced by the chapters |
 | `build_pdf.py` / `build_pdf.sh` | The PDF builder |
 
@@ -87,7 +88,7 @@ git pull                      # get everyone else's latest work FIRST
 # ... edit your chapter(s) ...
 ./build_pdf.sh                # optional: check how it looks
 git add 10_ch4_results.md     # add just what you changed
-git commit -m "ch4: fill in final YOLO11 test metrics"
+git commit -m "ch4: fill in final YOLO26 test metrics"
 git push
 ```
 
@@ -153,20 +154,27 @@ them rather than silently rewriting it.
 it to roughly 57–61 pages. The example book we were given (RoadXpert) is 43 pages.
 
 **What is finished:** the full narrative across all chapters — introduction, literature review,
-architecture, the complete data pipeline, all five model-development stages with their real
+architecture, the complete data pipeline, all four model-development stages with their real
 measured metrics, server and client implementation, deployment, evaluation methodology, latency
 and real-time analysis, the challenges chapter, conclusions, references and appendices.
 
 **What is missing** — all of it tracked in `TODO_NUMBERS.md`:
 
-1. **The final 17-class YOLO11 results.** Per-seed validation mAP, final test precision/recall/mAP,
-   and per-class AP. This is the single biggest gap, and it is in the chapter the project is most
-   graded on.
-2. **Server and client per-stage latency numbers** from the admin dashboard.
-3. **Twelve figures** — four copied straight out of the Ultralytics run directory, three small
-   plots, three diagrams, and the real street photographs required by the final review meeting.
-4. **A handful of facts to verify**, including the deployed `HIGH_RISK_CLASSES` list and the team
-   role split in Appendix D.
+1. **A test-split evaluation of the delivered model.** The 17-class YOLO26-small results are in
+   the book, but every one of them is measured on the **validation** split; the frozen
+   5,957-image test split has never been run against the delivered checkpoint. This is the
+   single biggest gap, and it is in the chapter the project is most graded on.
+2. **Server and client per-stage latency numbers** from the admin dashboard, measured on the GPU
+   deployment after a stats reset — the current headline figures trace to code comments, not to a
+   saved artefact.
+3. **Eleven figures** — four copied straight out of the Ultralytics run directory, three small
+   plots, two diagrams, and the real street photographs required by the final review meeting.
+   Figure 3.1 is drawn and in place; add the rest as `![alt](figures/name.svg)` and the builder
+   inlines them automatically.
+4. **A handful of facts to verify** (the team role split in Appendix D, the `cross` ID-0
+   mapping), plus the decisions listed in `AMBIGUOUS.md` — most importantly which deployment the
+   book presents as primary and whether the server's legacy 14-class list gets reconciled with
+   the 17-class model before submission.
 
 `TODO_NUMBERS.md` also carries an **honesty checklist** — statements that are true today and would
 become false if the work progresses (no user study yet, no offline mode, `manhole` never

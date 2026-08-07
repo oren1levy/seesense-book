@@ -19,8 +19,8 @@ line was skipped, and images left with zero valid boxes were never copied.
 
 **Fix and payoff.** Detect the format by counting coordinates and, for polygons, compute the tight
 enclosing box (§3.2.7). Re-running the resumable builder recovered 1,949 stairs images and,
-through the same fix, 3,185 construction and 846 bench images vanishing for the same reason —
-**6,199 recovered images, 6.8 % of the final dataset**.
+through the same fix, principally 3,185 construction and 846 bench images vanishing for the same
+reason — **6,199 recovered images in all, 6.8 % of the final dataset**.
 
 **Lesson.** "Image count equals label count" is necessary but wholly insufficient, because a
 silent format mismatch drops images and their labels *together* and every consistency check still
@@ -69,6 +69,13 @@ not the development machine.* A local benchmark was not merely optimistic here; 
 opposite direction from reality. Containers routinely lie about the machine they run on, and any
 library auto-sizing a thread pool from the core count will get it wrong.
 
+**Epilogue — the same lesson, mirrored.** After the system moved to a GPU VM (§3.6.1), the thread
+caps that had rescued the CPU deployment became the regression: with the cap in place YOLO ran at
+149 ms per frame; removing it restored 26–36 ms. The caps are now gone, and `main.py` carries a
+warning against reintroducing them. *Measure on the deployment target* therefore has a corollary:
+a fix earned on one target is not portable to the next — the measurement has to be repeated, not
+the conclusion.
+
 ## 5.4 Alert flooding — the challenge that shaped the product
 
 **Symptom.** The first working end-to-end version was intolerable within seconds. At ~20 FPS a
@@ -79,14 +86,15 @@ object that was there last frame and is still there generated a fresh alert. And
 by a few pixels every frame, so naive frame-to-frame comparison made even the "approaching" flag
 flicker several times a second.
 
-**Fix, in three parts.** A **four-frame motion window** instead of frame-to-frame comparison, so
-jitter reads as `static` and only sustained growth reads as `approaching`. **Motion-first alert
-classification**, so objects that are not approaching never raise a red alert. And **per-track
-alert deduplication**, retaining the last announced level per track ID and firing only on a genuine
-transition.
+**Fix, in three parts.** A **motion window measured in seconds** instead of frame-to-frame
+comparison — ultimately a least-squares trend over 0.8 s with hysteresis and a confirmation time
+(§3.4.3) — so jitter reads as `static` and only sustained growth reads as `approaching`.
+**Motion-first alert classification**, so objects that are not approaching never raise a red
+alert. And **per-track alert deduplication**, retaining the last announced level per track ID and
+firing only on a genuine escalation.
 
 **Lesson.** For a non-visual interface, the hard problem is not producing information — it is
-suppressing it. A visual overlay can update 22 times a second because the eye samples what it
+suppressing it. A visual overlay can update dozens of times a second because the eye samples what it
 wants; an audio channel is serial and blocking, and it competes with the environmental hearing the
 user navigates by. §4.8 argues this is the project's central design contribution.
 
@@ -106,15 +114,18 @@ user navigates by. §4.8 argues this is the project's central design contributio
 | Contaminated oversampling evaluation | Duplication applied to all three splits | Train-split-only rule; test-set freeze | Resolved as policy |
 | Training on data that was not there | Ephemeral `/content`; silent skip | Persist to Drive; fail loudly; verify artefacts (§5.2) | Resolved |
 | Non-comparable metrics across stages | Different test sets per stage | Name the evaluation set on every row | Resolved |
-| ONNX 75× slower in production | Container reported 48 cores, limited to 8 vCPU | Thread caps before import; ONNX removed (§5.3) | Resolved |
+| ONNX 75× slower in production | Container reported 48 cores, limited to 8 vCPU | Thread caps before import; ONNX removed — and the caps themselves reverted after the GPU migration (§5.3) | Resolved |
 | False "connection lost" | Inference blocking the async event loop, stalling `/health` | `asyncio.to_thread` + global lock | Resolved |
+| Event loop starved by write threads | One fresh thread per DB write, per frame (~80/s at 40 FPS) | Single batched writer flushing once a second | Resolved |
 | SOS froze the entire server | Synchronous SMTP on the event loop; `/health` timed out and every request stalled | All e-mail dispatched on daemon threads | Resolved |
+| "Path clear" with a hazard still in the path | Clearance keyed to alert level, which static objects also score | Presence-based clearance + one-shot static notice (§3.4.5) | Resolved |
 | 71 ms per frame of database work | Settings read on every frame | In-memory cache; writes off the hot path | Resolved |
 | Diagnostics never appeared in logs | Module imported before `logging.basicConfig()`, root logger still at WARNING | Moved the call into `load_model()` | Resolved |
 | Timestamps three hours wrong | Naive datetime with no timezone marker crossing a process boundary | Normalise to UTC and pin formatting to `Asia/Jerusalem` | Resolved (3 pages outstanding) |
 | Sensors unusable in development | `getUserMedia`, gyroscope and geolocation require a secure context | ngrok HTTPS tunnel + allowed-hosts entry | Resolved (process cost) |
-| Alert flooding | Alerting on presence; box jitter | 4-frame window, motion-first logic, per-track dedup (§5.4) | Resolved |
-| Over-sensitive health watchdog | Single-reading thresholds, tight values for mobile RTT | Consecutive streaks; announce-once flags | Partially resolved |
+| Alert flooding | Alerting on presence; box jitter | 0.8 s trend window, motion-first logic, per-track dedup (§5.4) | Resolved |
+| Over-sensitive health watchdog | Single-reading thresholds, tight values for mobile RTT | Consecutive streaks; announce-once flags; automatic stop on red currently not wired | Partially resolved |
+| Alignment gate fails open | Initial orientation state assumes upright; gyro-less or permission-denied devices never update it | Documented (§3.5.10); fix pending | **Open** |
 | iOS platform restrictions | Gesture-gated sensor permission; no Vibration API; no background execution | Gesture-gated request; capability detection with honest reporting | Mitigated |
 | Motion blur and low light | Domain shift from clean academic imagery | Quality gates, augmentation, alignment gate | **Open** |
 | Battery and thermal load | Continuous camera, encoding and radio | Start/stop control; capture early-out | Mitigated, unmeasured |
@@ -134,7 +145,7 @@ only genuine understanding any of us has of what a detection head, a grid encode
 strategy and a multi-component loss actually do — and the ability to read a YOLO training curve and
 know what each loss term means.
 
-*Freeze the test set.* Adopted after the Stage IV contamination and applied strictly thereafter. It
+*Freeze the test set.* Adopted after the Stage III contamination and applied strictly thereafter. It
 costs flexibility late in the project, which is precisely the point.
 
 *Verify the artefact, not the script.* Every data disaster here — the polygon drop, the missing

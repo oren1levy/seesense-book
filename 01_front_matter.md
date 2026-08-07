@@ -12,32 +12,20 @@
 
 Approved by the supervisor: Dr. Moshe Butman
 
-Project approver: Dr. Raz Lin
-
-Specialization: Deep Learning · Project #503
-
 Submitted to the Computer Science Faculty of the College of Management
 Rishon LeZion
 
 August 2026
 
-Source code: <https://github.com/oren1levy/SeeSense>
+Source code: <https://github.com/oren1levy/SeeSense> [45]
 
 ---
 
 # Acknowledgments
 
-We would like to express our deepest gratitude to our supervisor, Dr. Moshe Butman, for his
-continuous guidance and honest, demanding feedback throughout the year. From the very first
-meeting he insisted that we train the detector ourselves rather than reuse a model somebody else
-had already trained, and that we demonstrate one complete working pipeline before chasing
-accuracy. Both instructions were uncomfortable at the time and both turned out to be the reason
-this project produced something we actually understand.
-
-We also thank Dr. Raz Lin and the Computer Science faculty of the College of Management for the
-framework, the review meetings, and the academic standard they held us to; and our families and
-friends for their patience during the long weeks of dataset building, failed training runs, and
-evenings spent walking around Rishon LeZion pointing a phone at kerbs and manhole covers.
+We would like to express our deepest gratitude to our supervisor, Dr. Moshe Butman, for
+continuous guidance and insightful feedback throughout the project. Special thanks to the
+Computer Science faculty and the SeeSense team members for their dedication and collaboration.
 
 ---
 
@@ -50,16 +38,22 @@ user is actually in danger, and returns a verdict fast enough for the phone to s
 warning while the obstacle is still ahead of the user.
 
 The system is a full product, not only a model. The client is a mobile-first, right-to-left
-Hebrew Progressive Web App in React 19: it opens the rear camera, verifies with the gyroscope
-that the phone is held usably, streams JPEG frames over a WebSocket with bounded-depth
-backpressure, and converts the server's verdict into Hebrew text-to-speech and haptic patterns.
-The server is a Python FastAPI application performing YOLO inference, ByteTrack-style tracking,
-motion-first danger classification, and the whole application backend — accounts, JWT auth, a
-three-level admin system, per-user settings, detection history, a feedback and ticketing system,
-verified emergency contacts, an SOS flow, and a persistent performance-metrics subsystem. It is
-deployed as a Docker image on Railway against MongoDB Atlas.
+Hebrew single-page application in React 19: it opens the rear camera, uses the device-orientation
+sensor to check that the phone is pitched within fifteen degrees of vertical, streams JPEG frames
+over a WebSocket while capping how many frames may be in flight at once, and turns the server's
+verdict into Hebrew text-to-speech and vibration patterns — speech being the only channel on iOS,
+which does not implement the Vibration API. The server is a Python FastAPI application performing
+YOLO inference, ByteTrack-inspired tracking with Hungarian assignment, motion-first danger
+classification, and the whole application backend — accounts, JWT auth, two administrative tiers
+above the ordinary user, per-user settings and per-user high-risk classes, detection history, a
+feedback and ticketing system, verified emergency contacts, an SOS flow, and a persistent
+performance-metrics subsystem. No camera frame is ever stored: the history record holds only
+derived scalars — class label, confidence, a coarse Close/Medium/Far band and the danger level.
+The application runs in two parallel deployments against a managed MongoDB database: a Docker
+image on Railway as the CPU-only baseline, and a GPU-backed Google Cloud VM on which the same
+FastAPI process also serves the built client — one origin, one port, one certificate.
 
-The deep-learning work went through five stages, and the negative results were as instructive as
+The deep-learning work went through four stages, and the negative results were as instructive as
 the positive ones. A detector written from scratch — frozen ResNet18 backbone, hand-implemented
 YOLO-style head, grid encoder, multi-component loss, decoder and NMS — trained successfully but
 stopped generalising after four epochs and produced unreliable, pole-biased detections on dense
@@ -78,25 +72,37 @@ Mapillary Vistas plus nine Roboflow datasets remapped into one unified taxonomy.
 surfaced the hardest bug of the project: several sources were annotated as YOLO **segmentation
 polygons** rather than boxes, and the merge parser silently skipped every line without exactly
 five fields. Converting polygons to their tight enclosing boxes recovered 6,199 images that had
-been vanishing without a single error message. The final model is a YOLO11-nano detector trained
-by transfer learning for 80 epochs at 640×640, batch 16, run three times with different seeds and
-selected by validation mAP@50-95.
+been vanishing without a single error message. The detector now in production is a **YOLO26-small
+model (about 10 M parameters)** fine-tuned from pretrained weights on all seventeen classes for 80
+epochs at 640×640, batch 64, seed 42, with mosaic augmentation disabled for the final ten epochs.
+It validates at Precision 0.754, Recall 0.587, mAP@0.50 0.636 and mAP@0.50:0.95 0.458 — measured
+over the full seventeen-class taxonomy, a considerably harder benchmark than any earlier stage.
+The alert vocabulary the server currently speaks is a thirteen-class subset of that taxonomy: the
+network also predicts kerbs, manholes, bins and construction, but those detections are filtered
+out before they reach the user.
 
 On the systems side the project produced a measured optimisation log rather than a guess: HTTP
 POST per frame replaced by a WebSocket stream; a 71 ms per-frame settings read replaced by an
-in-memory cache costing 0 ms; the database write moved off the hot path; inference moved to a
-worker thread so the event loop kept answering health pings; and reducing the detection input
-size from 640 to 512 — the single biggest lever — bringing server-side latency to roughly **41 ms
-per frame**. Two experiments failed usefully: an ONNX Runtime port that benchmarked 1.5× faster
-locally ran **75× slower** on the deployment target because of container thread oversubscription.
-With a measured ~131 ms network round trip and bounded in-flight depth, the pipeline sustains
-roughly **22 FPS at ~216 ms end-to-end**, against an original success criterion of 200–300 ms.
+in-memory cache costing 0 ms; per-frame database writes consolidated into a once-a-second batch
+writer off the hot path; inference moved to a worker thread behind a single global lock so the
+event loop kept answering health pings; and, on the CPU-only container, a reduction of the
+detection input size from 640 to 512 pixels that brought server-side inference to roughly 41 ms
+per frame. Two experiments failed usefully: an ONNX Runtime port that benchmarked 1.5× faster
+locally ran **75× slower** on the deployment target because the container advertises the host's
+core count and the runtime oversubscribed it — and the thread cap written to fix that later
+crippled the GPU deployment in turn and had to be reverted, teaching the same lesson twice. The
+delivered deployment runs the detector on a cloud GPU at the full 640-pixel input, at roughly
+16 ms of server time per frame, sustaining about **50 FPS at ~120–130 ms end-to-end** against an
+original success criterion of 200–300 ms. Alert quality needed the same discipline as latency:
+motion timings were re-expressed in seconds rather than frame counts, approach detection became a
+least-squares trend test with hysteresis and a confirmation streak, and alerts now fire only when
+an object's danger level escalates — so a parked car no longer speaks on every frame.
 
-SeeSense demonstrates that a phone, a commodity cloud container and a self-trained nano detector
-suffice to deliver useful real-time obstacle warnings — and that in a system of this kind the
-difficult engineering is not the neural network but everything around it: label taxonomies that
-disagree, silent data loss, class imbalance no collection can remove, alert fatigue, and the gap
-between a benchmark image and a real pavement.
+SeeSense demonstrates that a phone, a commodity cloud container and a self-trained detector
+suffice to deliver useful real-time obstacle warnings — and that in a
+system of this kind the difficult engineering is not the neural network but everything around it:
+label taxonomies that disagree, silent data loss, class imbalance no collection can remove, alert
+fatigue, and the gap between a benchmark image and a real pavement.
 
 ---
 
@@ -132,12 +138,14 @@ Parameters · D. Project Timeline and Team Roles
 
 | | | | |
 |---|---|---|---|
-| **AP** Average Precision | **E2E** End-to-End | **NMS** Non-Maximum Suppression | **RTT** Round-Trip Time |
-| **API** Application Programming Interface | **FPS** Frames Per Second | **NPU** Neural Processing Unit | **SPA** Single-Page Application |
-| **CNN** Convolutional Neural Network | **HUD** Heads-Up Display | **OID** Open Images Dataset | **TTL** Time To Live |
-| **COCO** Common Objects in Context | **IoU** Intersection over Union | **PWA** Progressive Web App | **TTS** Text-To-Speech |
-| **CORS** Cross-Origin Resource Sharing | **JWT** JSON Web Token | **REST** Representational State Transfer | **WS** WebSocket |
-| **DFL** Distribution Focal Loss | **mAP** mean Average Precision | **RTL** Right-to-Left | **YOLO** You Only Look Once |
+| **AP** Average Precision | **FIFO** First In, First Out | **JPEG** Joint Photographic Experts Group | **POC** Proof of Concept |
+| **API** Application Programming Interface | **FPS** Frames Per Second | **JSON** JavaScript Object Notation | **RTL** Right-to-Left |
+| **CIoU** Complete Intersection over Union | **GPS** Global Positioning System | **JWT** JSON Web Token | **RTT** Round-Trip Time |
+| **CNN** Convolutional Neural Network | **GPU** Graphics Processing Unit | **LR** Learning Rate | **TTL** Time To Live |
+| **COCO** Common Objects in Context | **HSV** Hue, Saturation, Value | **mAP** mean Average Precision | **TTS** Text-To-Speech |
+| **CORS** Cross-Origin Resource Sharing | **HTTP** Hypertext Transfer Protocol | **NMS** Non-Maximum Suppression | **WS** WebSocket |
+| **CPU** Central Processing Unit | **HUD** Heads-Up Display | **NPU** Neural Processing Unit | **YAML** YAML Ain't Markup Language |
+| **DFL** Distribution Focal Loss | **IoU** Intersection over Union | **ONNX** Open Neural Network Exchange | **YOLO** You Only Look Once |
 
 ---
 
@@ -152,8 +160,8 @@ Parameters · D. Project Timeline and Team Roles
 | 3.5 | Sample augmented training batches (mosaic, HSV jitter, scale, flip) | 3.3 |
 | 3.6 | Motion-first alert classification decision tree | 3.4 |
 | 3.7 | Dashboard HUD: brackets, spirit level, detection overlay, alert overlay | 3.5 |
-| 4.1 | Training curves for the final YOLO11 run | 4.3 |
-| 4.2 | Normalized confusion matrix on the 17-class test set | 4.3 |
+| 4.1 | Training curves for the final YOLO26 run | 4.3 |
+| 4.2 | Normalized confusion matrix on the 17-class validation split | 4.3 |
 | 4.3 | Per-class precision–recall and F1 curves | 4.3 |
 | 4.4 | Latency breakdown and throughput versus pipeline depth | 4.4 |
 | 4.5 | Qualitative detections on real street photographs, and failure cases | 4.6 |

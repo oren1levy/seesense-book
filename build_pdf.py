@@ -19,9 +19,11 @@ by default. If Chrome is missing, the HTML is still produced and can be opened
 in any browser and printed to PDF manually (Cmd-P → Save as PDF).
 """
 
+import base64
 import datetime
 import glob
 import html as html_mod
+import mimetypes
 import os
 import re
 import shutil
@@ -125,6 +127,10 @@ a { color: #1d4ed8; text-decoration: none; word-break: break-word; }
   padding: 1px 5px; font-family: "SF Mono", Menlo, monospace; font-size: 8.3pt;
   color: #1a4a7a; font-style: normal;
 }
+img, svg {
+  max-width: 100%; height: auto; display: block;
+  margin: 10px auto 2px; page-break-inside: avoid;
+}
 """
 
 
@@ -157,6 +163,41 @@ def highlight_placeholders(html):
     return html
 
 
+def embed_figures(html):
+    """Inline every local figure into the HTML.
+
+    Two reasons, both practical. The generated HTML lives in build/, so a
+    relative path like "figures/x.svg" written in a chapter would not resolve
+    from there and the figure would print as a broken image. And inlining keeps
+    the built HTML a single self-contained file that can be sent to someone.
+
+    SVGs are inlined as markup (so they stay vector-sharp in the PDF); anything
+    else is embedded as a base64 data URI.
+    """
+    count = [0]
+
+    def repl(m):
+        tag, src = m.group(0), m.group(1)
+        if src.startswith(("http://", "https://", "data:")):
+            return tag
+        path = os.path.join(HERE, src)
+        if not os.path.exists(path):
+            print("WARNING: figure not found: %s" % src, file=sys.stderr)
+            return tag
+        count[0] += 1
+        if path.lower().endswith(".svg"):
+            with open(path, encoding="utf-8") as fh:
+                svg = fh.read()
+            return re.sub(r"<\?xml.*?\?>\s*", "", svg, flags=re.S)
+        mime = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        with open(path, "rb") as fh:
+            data = base64.b64encode(fh.read()).decode("ascii")
+        return tag.replace(src, "data:%s;base64,%s" % (mime, data))
+
+    html = re.sub(r'<img\b[^>]*\bsrc="([^"]+)"[^>]*?/?>', repl, html)
+    return html, count[0]
+
+
 def main():
     os.makedirs(BUILD, exist_ok=True)
     now = datetime.datetime.now()
@@ -178,12 +219,14 @@ def main():
         output_format="html5",
     )
     body = highlight_placeholders(body)
+    body, n_embedded = embed_figures(body)
 
     stampline = (
         "SeeSense — Final Project Book &nbsp;·&nbsp; DRAFT built %s "
-        "&nbsp;·&nbsp; %s words &nbsp;·&nbsp; %d unresolved TODOs, %d figure slots "
+        "&nbsp;·&nbsp; %s words &nbsp;·&nbsp; %d figures placed, "
+        "%d unresolved TODOs, %d figure slots "
         "&nbsp;·&nbsp; generated from the Markdown chapters — do not edit this PDF"
-        % (html_mod.escape(human), format(words, ","), n_todo, n_fig)
+        % (html_mod.escape(human), format(words, ","), n_embedded, n_todo, n_fig)
     )
 
     page = (

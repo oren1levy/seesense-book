@@ -16,12 +16,16 @@ destroyed by a format mismatch, and raising `crosswalk` from 33 images to 3,511.
 
 **A model, and four instructive failures on the way to it.** We built a detector from scratch —
 frozen ResNet18 backbone, hand-written YOLO-style head, grid encoder, four-component loss, decoder
-and NMS — and established experimentally that it could not cope with dense street scenes. We
-established a YOLOv8n baseline at P 0.669 / R 0.409 / mAP@0.50 0.4528 on 3,699 images and 86,381
-instances; fine-tuned to 14 classes reaching 0.862 / 0.818 / 0.853 / 0.618 on the new-class split;
-improved recall to 0.843 with targeted oversampling; produced, and correctly identified as invalid,
-a combined-dataset run that had trained on the wrong data; and delivered a YOLO11-nano model
-trained on the final verified dataset with three seeds and selected by validation mAP@50-95.
+and NMS — and established experimentally that it could not cope with dense street scenes, and that
+a pipeline recording only loss cannot detect its own collapse. We established a YOLOv8n baseline at
+P 0.669 / R 0.409 / mAP@0.50 0.4528 on 3,699 images and 86,381 instances; fine-tuned to 14 classes
+reaching 0.862 / 0.818 / 0.853 / 0.618 on the new-class split, and diagnosed the catastrophic
+forgetting of the original ten classes that came with it; improved recall to 0.843 with targeted
+oversampling, and recorded the split contamination that made the gain imprecise; produced, and
+correctly identified as invalid, a combined-dataset run that had trained on the wrong data; and
+delivered a YOLO26-small model trained in a single campaign on the final verified 17-class dataset,
+validating at P 0.754 / R 0.587 / mAP@0.50 0.636 / mAP@0.50:0.95 0.458 over 11,086 images and
+180,736 instances.
 
 **A complete product.** Not a notebook and a demo video, but a deployed client–server system: a
 mobile-first Hebrew RTL web app with camera capture, gyroscope alignment gating, bounded-depth
@@ -29,17 +33,21 @@ WebSocket streaming, a live detection HUD, Hebrew text-to-speech, haptic pattern
 watchdog, and a full account area — profile, per-user sensitivity and class preferences, session-
 grouped detection history, a three-entry-point feedback system, verified emergency contacts and an
 SOS flow — plus three administrative pages behind a three-level permission system. On the server: a
-five-stage timed inference pipeline, a ByteTrack-inspired per-user tracker, motion-first danger
-logic, per-track alert deduplication, JWT authentication with real revocation, twelve transactional
-e-mail templates, and a two-layer performance-metrics subsystem.
+six-stage timed inference pipeline, a ByteTrack-inspired per-user tracker, motion-first danger
+logic, per-track alert deduplication, presence-based clearance, JWT authentication with real
+revocation, thirteen transactional e-mail templates, and a two-layer performance-metrics
+subsystem.
 
-**A measured performance story.** Server latency was brought to approximately **41 ms per frame**
-on a CPU-only container through a documented sequence of changes: HTTP → WebSocket, a 71 ms
-per-frame database read eliminated, writes moved off the hot path, inference moved to a worker
-thread, and input size reduced from 640 to 512. With a ~131 ms network round trip and bounded
-in-flight depth, the pipeline sustains roughly **22 FPS at ~216 ms end-to-end** — inside the
-original POC criterion of a 200–300 ms alert. Two experiments failed usefully and are reported as
-such, including an ONNX port 1.5× faster locally and 75× slower in production.
+**A measured performance story.** On the CPU-only container, server latency was brought to
+approximately 41 ms per frame through a documented sequence of changes: HTTP → WebSocket, a 71 ms
+per-frame database read eliminated, per-frame writes batched off the hot path, inference moved to
+a worker thread, and input size reduced from 640 to 512. The delivered system then moved to a
+GPU-backed VM, restoring the full 640-pixel input at roughly 16 ms of server time per frame and
+sustaining about **50 FPS at ~120–130 ms end-to-end** — comfortably inside the original POC
+criterion of a 200–300 ms alert, with most of the remaining budget being network distance rather
+than compute. Two experiments failed usefully and are reported as such: an ONNX port 1.5× faster
+locally and 75× slower in production, and a thread cap that saved the CPU deployment and had to
+be reverted on the GPU one.
 
 **A design contribution.** The most transferable result is not a number. It is the observation that
 for a non-visual safety interface the hard problem is **suppression, not detection**. Running the
@@ -65,11 +73,13 @@ and extreme angles at a rate no benchmark reproduces. **Single-worker architectu
 trackers, metrics and presence all live in process memory, so horizontal scaling needs Redis. **No
 automated tests** — the interactive harness is not a test suite. **No error boundary in the
 client**: an exception unmounts the React tree and leaves a blank screen, which for a user who
-cannot see the screen is a completely silent failure. **Known open bugs**: the `EmergencyContacts`
-assignment-instead-of-comparison bug; four out-of-sync Hebrew class-name maps; the timezone fix not
-applied on three pages; health thresholds contradicting their own documentation and tighter than
-measured mobile RTT justifies; and `MAX_INFLIGHT` shipped at 5 where the documented reasoning
-concludes 4.
+cannot see the screen is a completely silent failure. **Known open bugs and unfinished work**:
+the `EmergencyContacts` assignment-instead-of-comparison bug; the alignment gate failing open on
+devices that never report orientation; six drifted Hebrew class-name maps; the timezone fix not
+applied on three pages; health-service comments describing stale thresholds, and values tighter
+than measured mobile RTT justifies; the watchdog's automatic stop on a red connection not being
+wired; a runtime streaming-configuration feature built on both sides but connected on neither;
+and service functions for changing a password and clearing history that no interface calls.
 
 **And the most important one: no blind user has used this system.** Every usability claim in this
 book is a design argument, not an empirical finding. SeeSense is a research prototype — not
@@ -78,14 +88,22 @@ complement a white cane, never to replace one.
 
 ## 6.3 Future Work
 
-**Immediate — completing what is built.** Unify the class map: the 17-class model is deployed, but
-the client still carries four page-local Hebrew name maps that have drifted, so extract one shared
-map and a future retrain touches one file rather than five. Redistribute `manhole` across the
-splits and re-evaluate, so the class stops being unmeasurable. Fix the known bugs, the one-character
-contacts bug first. Add an error boundary with a spoken failure announcement, so a crash is audible
-rather than invisible. Unit-test the two pure safety functions — the alert classifier and the motion
-analyser. Recalibrate the health thresholds against the measured ~131 ms baseline and correct the
-documentation. And visually verify the `cross` ID-0 mapping on a sample of images.
+**Immediate — completing what is built.** Reconcile the class vocabulary end to end: the 17-class
+model is deployed, but the server still filters through the legacy 14-class list — so `curb`,
+`trash_can`, `manhole` and `construction` never reach the user — and the client carries six
+drifted Hebrew name maps; one shared server list and one shared client map would make a future
+retrain touch two files rather than eight. Redistribute `manhole` across the splits and
+re-evaluate, so the class stops being unmeasurable. Fix the known bugs, the one-character
+contacts bug and the fail-open alignment gate first, and either re-wire the watchdog's automatic
+stop or record the decision not to. Finish or delete the half-built runtime streaming
+configuration: the service layer, the limits and the administrative page all exist, and what is
+missing is a startup load, two endpoints, three client service functions and a route — an hour of
+work that would turn input size, compression and pipeline depth into things an administrator can
+tune against a live deployment instead of constants requiring a rebuild. Add an error boundary with a spoken failure announcement, so
+a crash is audible rather than invisible. Unit-test the two pure safety functions — the alert
+classifier and the motion analyser. Recalibrate the health thresholds against the measured
+~120 ms baseline and correct the stale comments. And visually verify the `cross` ID-0 mapping on
+a sample of images.
 
 **Evaluation — the missing evidence.** A **user study with blind and visually-impaired
 participants** is the single highest-value piece of future work, and the questions it must answer
@@ -93,28 +111,32 @@ are specific: is the alert cadence tolerable over a 30-minute walk; are the Hebr
 intelligible over street noise; is the Close/Medium/Far abstraction actionable; do users trust the
 "path clear" signal; and does the system change behaviour in a way that is safe. Beyond that: field
 testing across night, rain, glare and crowds with success and failure documented per condition;
-measured battery drain and thermal behaviour over continuous sessions on several devices; and a
-controlled comparison against at least one alternative detector architecture on the frozen test
-split, so the choice of YOLO11n rests on measurement rather than reasoning alone.
+measured battery drain and thermal behaviour over continuous sessions on several devices; an
+evaluation of the delivered checkpoint on the frozen 5,957-image test split, which has still never
+been run; and a controlled comparison against at least one alternative detector architecture on
+that same split, so the choice of YOLO26s rests on measurement rather than reasoning alone.
 
 **Model and data.** Address residual imbalance with technique rather than collection: class
 weighting, focal-style loss, and **copy-paste augmentation** [19] to synthesise rare-class
 instances into varied scenes — the most promising untried avenue for `manhole`, `curb` and
 `trash_can`. Add **motion-blur and low-light augmentation** plus a training subset captured *while
-walking*, attacking the domain shift directly. Step up model size (`yolo11s`/`m`) for the
-server-side model where the compute budget can absorb it, keeping nano for the eventual on-device
-path, and measure the accuracy/latency trade rather than assuming it. Collect more data for the
+walking*, attacking the domain shift directly. Step up model size (`yolo26m`/`l`) for the
+server-side model where the compute budget can absorb it — the delivered model is already the
+*small* tier — keeping a nano or quantised variant for the eventual on-device path, and measure the
+accuracy/latency trade rather than assuming it. Collect more data for the
 five classes below the floor, distributed properly across splits. And publish a **model card**
 documenting intended use, measured per-class performance, failure modes and explicit non-use cases.
 
 **The hybrid architecture.** An **on-device model** quantised to 8-bit and exported to CoreML or
-TensorFlow Lite removes the 131 ms network term that dominates the latency budget, and is the only
-route to operation without connectivity. **Complete the failover**: the watchdog already detects
-degradation, so connect it to a mode switch rather than a stop, with a spoken explanation of the
-reduced capability. Implement the **safety-ping protocol** from the characterisation document — on
-losing connectivity, send the last known GPS position to a verified contact, so a user who falls in
-a dead zone has already been located. And consider **edge deployment** geographically closer to
-users for the online path.
+TensorFlow Lite removes the ~100 ms network term that dominates the latency budget, and is the
+only route to operation without connectivity. **Complete the failover**: the watchdog already
+detects degradation, so connect it to a mode switch rather than a warning, with a spoken
+explanation of the reduced capability. Implement the **safety-ping protocol** from the
+characterisation document — on losing connectivity, send the last known GPS position to a
+verified contact, so a user who falls in a dead zone has already been located. And **migrate the
+GPU VM to a Tel Aviv region** when capacity appears — the current deployment sits in Warsaw only
+because no Israeli GPU capacity was available, and the ~90–100 ms of distance it adds is the
+single largest removable term in the latency budget.
 
 **Product and capability.** A **native application** (or a Capacitor wrapper) for true background
 execution, reliable haptics on iOS and deeper camera control — trading the frictionless web

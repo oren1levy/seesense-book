@@ -31,6 +31,8 @@ https://arxiv.org/abs/2304.00501
 
 [47] Ultralytics, "YOLO11," 2024. https://docs.ultralytics.com/models/yolo11/
 
+[48] Ultralytics, "YOLO26," 2025. https://docs.ultralytics.com/models/yolo26/
+
 **Datasets**
 
 [5] T.-Y. Lin et al., "Microsoft COCO: Common Objects in Context," in *Proc. ECCV*, 2014.
@@ -104,8 +106,8 @@ https://datatracker.ietf.org/doc/html/rfc6455
 *Nature Methods*, vol. 17, pp. 261–272, 2020. https://scipy.org/
 
 Additional tooling used without specific citation: FastAPI and Uvicorn, React 19 and Vite 8,
-OpenCV, MongoDB Atlas, Docker, Railway, and the browser Web Speech, Vibration, DeviceOrientation
-and Geolocation APIs.
+OpenCV, MongoDB Atlas, Docker, Railway, Google Compute Engine, and the browser Web Speech,
+Vibration, DeviceOrientation and Geolocation APIs.
 
 **Project sources**
 

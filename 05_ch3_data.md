@@ -1,7 +1,10 @@
 ## 3.2 Data Collection, Preparation and Verification
 
-No part of this project consumed more time than the dataset, and none produced more instructive
-failures.
+Every other component of SeeSense began from something that already existed — a detector
+architecture, a web framework, a database. The dataset did not: no public corpus is organised
+around the objects that injure a pedestrian who cannot see them. This section documents how one
+was assembled from ten sources that disagreed with each other about almost everything, and how it
+was verified.
 
 ### 3.2.1 Defining the class taxonomy
 
@@ -35,7 +38,7 @@ to 10, then to the final 17.
 | 16 | `construction` | Barriers, cones, scaffolding — one "not walkable" signal |
 
 An intermediate **14-class** configuration also existed during development — the ten base classes
-plus `bollard`, `crosswalk`, `pothole` and `scooter` — and is what Stages III and IV were trained
+plus `bollard`, `crosswalk`, `pothole` and `scooter` — and is what Stage III was trained
 on (§3.3.4). It was superseded by the 17-class taxonomy, which dropped `pothole` and added `curb`,
 `trash_can`, `manhole` and `construction`. The deployed system runs the 17-class model.
 
@@ -218,9 +221,10 @@ if w > 0 and h > 0:
 > `[[FIGURE: one stairs image with polygon overlaid and the derived box]]`
 
 **Payoff.** Re-running the resumable builder recovered not only the 1,949 stairs images but also
-polygon-annotated images in **Construction (+3,185)** and **bench (+846)** disappearing for the
-same reason. The dataset grew from **84,940 to 91,139** — 6,199 recovered samples, 6.8 % of the
-final dataset, that had been vanishing without a single warning.
+polygon-annotated images in **Construction (+3,185)** and **bench (+846)**, disappearing for the
+same reason, with the balance spread thinly across the other polygon-bearing sources. The dataset
+grew from **84,940 to 91,139** — 6,199 recovered samples, 6.8 % of the final dataset, that had
+been vanishing without a single warning.
 
 **Lesson.** "Image count equals label count" is a necessary but wholly insufficient check: a
 silent format mismatch drops images and their labels *together*, so every consistency check still
@@ -254,7 +258,7 @@ rebuilding 85,000 images.
 
 ### 3.2.10 Verification protocol
 
-This protocol exists because of the Colab merge failure of §3.3.6, in which a training run
+This protocol exists because of the Colab merge failure of §3.3.4, in which a training run
 proceeded happily on data that was not what it claimed to be.
 
 | Check | Result |

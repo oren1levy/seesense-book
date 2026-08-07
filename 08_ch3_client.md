@@ -9,7 +9,7 @@ For the primary user the visual layer is not the interface; the audio and haptic
 Everything below that looks like polish — throttling, deduplication, spoken confirmations,
 announce-once flags — exists because a non-visual interface is far less forgiving of noise.
 
-Fifteen routes are defined: four public (login, register, forgot/reset password) and eleven
+Sixteen routes are defined: four public (login, register, forgot/reset password) and twelve
 protected — the camera dashboard, settings, profile, emergency contacts, detection history, SOS
 history, three feedback pages and three admin pages. Admin links are hidden unless the user is an
 administrator, and the **server** enforces the actual permission; hiding a control is a courtesy,
@@ -17,27 +17,40 @@ never a security boundary.
 
 ### 3.5.1 Streaming configuration
 
-Four documented numbers control the capture and upload pipeline. **`COMPRESSION_PERCENT = 50`**
-sets JPEG quality. **`INPUT_SIZE = 512`** is the square capture and detection size and **the
-biggest performance lever in the system**: the server runs YOLO at this size, so smaller means a
-smaller upload *and* a faster forward pass. 640 gives most detail; 512, 416 and 320 are
-progressively faster but the model sees less and may miss small or distant objects. The server
-clamps and echoes the value so the two sides never disagree about the coordinate space.
-**`MAX_INFLIGHT = 5`** is the pipeline depth — the number of frames sent but unanswered at any
-moment — with the trade-off documented as an explicit model:
+Three documented numbers control the capture and upload pipeline. **`COMPRESSION_PERCENT = 75`**
+sets JPEG compression, mapping to a canvas quality of 0.25 — the one knob for trading image
+sharpness against upload size. **`INPUT_SIZE = 640`** is the square capture and detection size
+and **the biggest performance lever in the system**: the server runs YOLO at this size, so
+smaller means a smaller upload *and* a faster forward pass. During the CPU-only era the client
+ran at 512 to hold latency down (§4.4.1); on the GPU deployment the full 640 is affordable,
+restoring detail on small and distant objects. The server clamps and echoes the value so the two
+sides never disagree about the coordinate space. **`MAX_INFLIGHT = 6`** is the pipeline depth —
+the number of frames sent but unanswered at any moment — and it is deliberately **the only
+control on the send rate**: a separate `TARGET_FPS` existed until August 2026 and was removed as
+a second, interacting limiter. The client sends the next frame the moment a reply frees a slot,
+so the rate settles at whatever the network and the server can sustain, governed by:
 
 ```
-per-frame latency ≈ network_RTT + depth × server_processing_time
-throughput        ≈ min(1 / server_time, depth / network_RTT)
+throughput λ = min(1/S, depth/R₀)        S  = server time per frame
+latency    W = depth / λ                 R₀ = round trip with no queueing
 ```
 
-At `INPUT_SIZE = 512` (~41 ms server-side) and a measured ~131 ms round trip, depth 1 gives ~7 FPS
-at ~131 ms with the server idle between frames; depth 2 gives ~13 FPS at ~172 ms; depth 4 gives
-~22 FPS at ~216 ms, about 96 % of the ~23.5 FPS ceiling. The reasoning recorded in the file is a
-safety argument, not a performance one: 22 FPS is more than smooth enough for a pedestrian, and
-216 ms of lag corresponds to roughly 3 m of reaction distance against a vehicle at 50 km/h.
-Crucially this is a **bounded** queue, not fire-and-forget, so a slow server can never build an
-unbounded backlog of stale frames.
+Below the crossover depth ≈ R₀/S the server idles between frames and added depth is free
+throughput; above it the server never idles and every added frame only queues. Measured on
+6 August 2026 against the GPU deployment (S ≈ 16.4 ms, a ~61 FPS ceiling; R₀ ≈ 120 ms): depth 6
+gives ~50 FPS at ~120 ms, depth 7 ~53 FPS at ~133 ms, depth 10 ~60 FPS at ~166 ms, and depth 20
+the same ~60 FPS at ~332 ms — identical throughput for double the delay. The shipped depth of 6
+sits just below the crossover (≈ 7), and the reasoning recorded in the file is a safety argument,
+not a performance one: latency is the safety number — at 50 km/h a car covers 1.4 m per 100 ms —
+and above ~25 FPS extra frames buy almost nothing, since the 0.8-second approach window is
+already oversampled. Crucially this is a **bounded** queue, not fire-and-forget, so a slow server
+can never build an unbounded backlog of stale frames.
+
+All three are **compile-time constants**, changed by editing the file and rebuilding. Only the
+input size has any server involvement, and only in one direction: the client requests its own
+value on every connect and the server echoes back the value it will actually use, which the
+client then adopts for the capture canvas and the overlay coordinate space. Making all three
+adjustable at runtime by an administrator was started and not finished (§3.4.7).
 
 ### 3.5.2 `VisionStream` and backpressure
 
@@ -45,14 +58,16 @@ unbounded backlog of stale frames.
 `wss` — so there is no second URL to keep in sync. `_sendTimes` is a FIFO of timestamps for frames
 sent but unanswered; `canSend` is true while its length is below `MAX_INFLIGHT`, after pruning
 entries older than three seconds. That prune is a robustness measure: if a result is ever lost, its
-FIFO entry would otherwise occupy a slot forever, and after five such losses the client would stop
+FIFO entry would otherwise occupy a slot forever, and after six such losses the client would stop
 sending and appear to hang.
 
 Because results arrive in send order, each incoming message is paired with the oldest outstanding
 timestamp to yield that frame's round-trip time. Both `result` **and** `error` messages record an
 RTT — an error still means the frame is finished and its slot must be released. Every five
-seconds, three small text messages carry telemetry off the hot path: average RTT, actual capture
-FPS from the last 30 sends, and the aggregated client stage breakdown.
+seconds, four small text messages carry telemetry off the hot path: average RTT (together with
+the latest health-ping RTT, so the server can split the round trip into an outbound and a return
+leg), actual capture FPS from the last 30 sends, a count of frames that never came back — which
+only the phone can know — and the aggregated client stage breakdown.
 
 The **reconnection policy** distinguishes causes. Close code 1000 (clean) does not reconnect.
 Codes 4001 and 4003 **deliberately do not reconnect**, because retrying would replay the same dead
@@ -75,10 +90,11 @@ frame matches what the user is looking at; `drawImage` is timed as `capture` and
 because it is asynchronous and returns a Blob that goes straight onto the socket with no base64
 conversion.
 
-The client **polls about three times faster than it sends**. An in-flight slot frees the instant a
-*result* arrives, and that moment never aligns with a fixed timer; polling only at the send rate
-would leave each freed slot idle for up to a full interval — dead time capping throughput well
-below the depth ceiling. The extra ticks are nearly free because of the early-out.
+The capture timer **polls at a fixed 120 Hz, far faster than any achievable send rate** — and
+deliberately does not set the frame rate; `MAX_INFLIGHT` does. An in-flight slot frees the
+instant a *result* arrives, and that moment never aligns with a fixed timer; polling only at the
+send rate would leave each freed slot idle for up to a full interval — dead time capping
+throughput well below the depth ceiling. The extra ticks are nearly free because of the early-out.
 
 **Overlay geometry** is the hardest mathematics in the client: mapping a box in
 `inputSize × inputSize` space onto screen pixels. The captured frame is the **centre square**
@@ -104,7 +120,10 @@ the "start scanning" handler, idempotently and handling denial.
 
 The gate converts an invisible failure into an actionable instruction. A blind user holding the
 phone at 40° receives no useful detections and, without the gate, no explanation; with it, they
-hear "הטה את המכשיר" — straighten the device.
+hear "הטה את המכשיר" — straighten the device. One caveat is recorded in §3.5.10: the hook's
+initial state assumes an upright phone, so a device that never fires an orientation event — no
+gyroscope, or a declined iOS motion permission — reads as permanently aligned and the gate
+silently becomes a no-op.
 
 ### 3.5.5 Feedback: haptics and Hebrew speech
 
@@ -122,16 +141,26 @@ different signal. A support check lets the settings page state plainly that iOS 
 API at all, rather than presenting a control that silently does nothing.
 
 **Hebrew text-to-speech** maps every backend class name to Hebrew (מכונית, אופניים, קורקינט…).
-The server's `alert_message` is English; the client always composes its own Hebrew utterance, so
-presentation language is purely a client concern. Several details matter more than they would in a
+The server's `alert_message` is English and the client never reads it; the client composes every
+utterance itself from the structured fields, so presentation language is purely a client concern.
+Phrases are built from where an object *is* rather than where it is going — "סכנה קרובה, מכונית
+לפניך" for an approaching threat, "אדם לפניך, אין תנועה" for a watched object confirmed
+motionless — because a spoken bearing is only useful if it tells the user where to turn. Several details matter more than they would in a
 visual application. **Voice selection**: the browser's voice list loads asynchronously, so it is
 cached and refreshed on `voiceschanged`, filtered by a `he` language prefix, with gender matched
 best-effort against name hints and falling back to "not the opposite gender" and then to any
-Hebrew voice; the settings page reports how many exist so it can warn that the gender preference
-may have no audible effect on this device. **Throttling**: a three-second cooldown, tracked
-separately for arbitrary messages and object announcements, with the latter additionally keyed on
-class name so a *different* object may interrupt — a car interrupting a bench announcement is
-correct. **Mute is derived, not a separate flag**: muted means precisely "the audio channel
+Hebrew voice; the voice-info API reports how many Hebrew voices exist, and the settings page uses
+it to disable the gender choice when it can have no audible effect on this device.
+**Throttling**: five speech paths with deliberately
+different rules. The ordinary path applies a three-second cooldown and cancels whatever is
+speaking, with an explicit *priority* flag that bypasses the cooldown for utterances that must
+never be swallowed — "path clear", the repeated danger warning, and the stop confirmation. A
+second path is used for status and lifecycle lines and deliberately neither cools down nor
+cancels, so paired announcements ("scanning on, connecting" then "connected") queue in order
+instead of cutting each other off. Object announcements keep their own cooldown keyed on class
+name so a *different* object may interrupt — a car interrupting a bench announcement is correct.
+A voice-preview path and the mute announcement bypass the throttle entirely. Haptics have their
+own two-second floor on the alert patterns. **Mute is derived, not a separate flag**: muted means precisely "the audio channel
 produces no sound", so unmuting restores volume and, if the channel was haptic-only, switches it
 to both — avoiding the classic bug where a user unmutes and still hears nothing. And the mute
 announcement bypasses both the cooldown and the audio gate, because "שמע כבוי" would otherwise be
@@ -146,9 +175,12 @@ transition fires a haptic pulse and a spoken confirmation.
 `handleResult` runs per frame with a stable reference so it never causes a re-subscribe: ignore if
 not scanning or paused; store `record_id` for one-tap feedback; update the overlay, alert level
 and leading object's direction and Hebrew name (`render`); if `danger_cleared`, speak "נתיב פנוי"
-once and return; otherwise **gate voice and haptics on `alert_is_new`** and fire the appropriate
-pattern and announcement (`feedback`). That single condition is the difference between an
-application that can be worn for an hour and one that cannot be tolerated for a minute.
+once and return. While a red-level danger is present and still approaching, the leading threat is
+re-announced every two seconds — a deliberate bypass of the novelty gate, because an ongoing
+threat must not fall silent for having been mentioned once. A `static_notice` from the server is
+phrased in Hebrew and spoken once per still episode. Otherwise **voice and haptics are gated on
+`alert_is_new`** (`feedback`). That last condition is the difference between an application that
+can be worn for an hour and one that cannot be tolerated for a minute.
 
 The capture gate is `isScanning && isAligned && stream.isOpen && stream.canSend`, **re-checked at
 send time** because alignment or the in-flight count may have changed during the asynchronous
@@ -162,8 +194,13 @@ a direction indicator colour-coded by alert level; an alert overlay with `role="
 millisecond figure is shown **only to administrators**, because a number a regular user cannot act
 on is noise; an always-visible **quick-report button** filing a wrong-detection report against the
 last `record_id` with a 2.5 s cooldown; and an **SOS button** that is a single tap — deliberately
-not a long-press or a gesture — falling back to coordinates `(0,0)` if the location fix fails so
-the alert still goes out.
+not a long-press or a gesture. The location fix behind it makes two attempts, a high-accuracy one
+with a twelve-second budget and then a fast cached one with eight, before giving up and sending
+the alert with no position at all: the system never fabricates a location, because an early
+`(0,0)` fallback produced a Google Maps link to "Null Island" in the Atlantic, which is worse
+than an honest "location unavailable". Administrators additionally see a live server-and-client
+frame-rate readout beside the health dot, sampled once a second and written so that a steady
+stream causes no re-render.
 
 > **Figure 3.7** — Dashboard HUD: corner brackets, spirit level, detection overlay, alert overlay
 > and health indicator.
@@ -177,18 +214,27 @@ the alert still goes out.
 | Level | Threshold | Behaviour |
 |---|---|---|
 | GREEN | < 100 ms | healthy, no feedback |
-| YELLOW | ≥ 100 ms | speaks "החיבור לא יציב" **once** |
-| ORANGE | ≥ 150 ms | speaks a recommendation to move, once |
-| RED | ≥ 200 ms on **3 consecutive** polls | `danger` haptic, "החיבור אבד, הסריקה הופסקה", stops scanning |
+| YELLOW | ≥ 100 ms on **2 consecutive** polls | speaks "החיבור לא יציב" **once** |
+| ORANGE | ≥ 150 ms on **2 consecutive** polls | speaks a recommendation to move, once |
+| RED | ≥ 200 ms on **3 consecutive** polls | `danger` haptic and a spoken "connection lost" |
 
-Recovery needs **2 consecutive** polls below the red threshold. Announce-once flags reset on
-recovery, so a genuinely new degradation is still announced. Requiring consecutive streaks rather
+The dot reacts to a single reading but the *voice* waits for a streak, so the visual indicator
+stays responsive without the audio channel commenting on every fluctuation. Recovery needs **2
+consecutive** polls below the red threshold and names the state it recovered *to* rather than
+just announcing that something changed. Announce-once flags reset on recovery, so a genuinely new
+degradation is still announced, and the all-clear only speaks if a degradation was announced in
+the first place. One wording detail is deliberate: the red announcement says only that the
+connection was lost, because the previous text also claimed scanning had stopped — and it has
+not (below). Telling a blind user their scan has stopped while it is still running is the worst
+possible direction for that error to point. Requiring consecutive streaks rather
 than single readings is what stops one unlucky ping from terminating a healthy session — a mobile
 network produces occasional 400 ms outliers with no underlying problem.
 
 This is the *monitoring* half of the hybrid failover architecture of §2.7: the measurement,
-thresholds, user notification and automatic stop are implemented. What is missing is the on-device
-model to fail over *to*, which is why the system currently stops rather than switching modes.
+thresholds and user notification are implemented. Two gaps remain. The **automatic stop on a red
+connection is not currently wired** — the dashboard's disconnect callback only logs, so scanning
+continues through a red state (§3.5.10). And there is no on-device model to fail over *to*, which
+is why degradation today produces warnings rather than a mode switch.
 
 ### 3.5.8 Client metrics, session handling and timezones
 
@@ -197,7 +243,7 @@ model to fail over *to*, which is why the system currently stops rather than swi
 dispatch) — with the network round trip between `encode` and `render` measured separately. It is
 zero-overhead by design: one array push onto a bounded 100-sample buffer, no timers, nothing
 allocated on the hot path. The aggregate ships every five seconds piggy-backed on the RTT report,
-so the full end-to-end breakdown — four client stages, network, five server stages — is visible in
+so the full end-to-end breakdown — four client stages, network, six server stages — is visible in
 one place for any live session.
 
 The axios instance attaches the bearer token and, on a 401, notifies session expiry — but **only
@@ -218,7 +264,7 @@ identically for every viewer.
 
 ### 3.5.9 Design system and accessibility
 
-The design system is a hand-written `global.css` of roughly 3,600 lines with no framework: dark
+The design system is a hand-written `global.css` of roughly 3,700 lines with no framework: dark
 glassmorphism with a neon HUD, mobile-first. Tokens cover the palette, glass surfaces with
 `backdrop-filter`, glow presets, a radius scale, and **safe-area insets** paired with
 `viewport-fit=cover` so the HUD and tab bar clear the iPhone notch and home indicator. Global
@@ -238,13 +284,26 @@ mask the alerts that matter. Tap targets are large and the SOS is one tap with n
 ### 3.5.10 Known client issues
 
 From a review of the current code: a genuine **one-character bug** in `EmergencyContacts.jsx`
-using assignment instead of comparison, so every contact renders as verified and pending contacts
-lose their "verify now" button — the highest-value single-character fix in the client. **Hebrew
-class-name maps are out of sync** across four pages, several page-local copies still listing
-classes the deployed model no longer emits while omitting newer ones; the effect is cosmetic, but
-it means every retrain requires editing five files instead of one shared map. **The timezone fix
-is not applied everywhere** — three pages still call `new Date(ts)` directly. **The health
-thresholds contradict the file's own header comment** and are tight relative to real mobile RTT,
-so YELLOW fires often. And there is **no error boundary**: an exception inside a page unmounts the
-React tree and leaves a blank screen, which for this user is a completely silent failure — the
-most important missing robustness feature in the client.
+using assignment instead of comparison (`c.status='verified'`), so every contact renders as
+verified and pending contacts lose their "verify now" button — the highest-value
+single-character fix in the client. **The alignment gate fails open**: `useOrientation`
+initialises `beta` to 90°, so a device that never fires an orientation event — no gyroscope, or a
+denied iOS motion permission — reads as permanently aligned and is never told to straighten the
+phone. **Hebrew class-name maps exist in six copies** — a complete 14-class map in the feedback
+service, four page-local 12-class copies still carrying `bus` and `truck` (classes the server
+never emits) while missing `bollard`, `crosswalk` and `scooter`, and a 10-class map in Settings —
+so several screens render newer classes as raw English, and every retrain requires editing six
+files instead of one shared map. **The timezone fix is not applied everywhere** — three pages
+still call `new Date(ts)` directly. **The health service's body comments still describe a stale
+250/400/600 ms scheme** although its header and constants are now 100/150/200 ms, and **the red
+state does not stop scanning** — the watchdog's automatic stop is not wired to anything, which
+the code now states honestly rather than announcing a stop that does not happen. **Admin routes
+are guarded only server-side**: the client hides the links but any authenticated user can open
+`/admin/*` URLs — harmless, since the server enforces, but untidy. **An administrative page for
+the runtime streaming configuration exists as a file but is unreachable** — it is not routed, no
+navigation links to it, and the three service functions it imports were never written, so it
+would fail on load; it is the client half of the unfinished feature described in §3.4.7.
+Similarly, service functions for **changing a password and clearing all history** exist with no
+interface calling them. And there is **no error boundary**: an exception inside a page unmounts
+the React tree and leaves a blank screen, which for this user is a completely silent failure —
+the most important missing robustness feature in the client.

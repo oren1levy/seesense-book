@@ -16,10 +16,28 @@ literal string. One `.gitignore` detail matters operationally: `*.pt` is ignored
 deployed weights, which must ship inside the image — a container that downloads its model at
 startup fails in exactly the circumstances where you most need it to start.
 
-Deployment is on **Railway** against **MongoDB Atlas**, configured entirely by environment
-variable: `SECRET_KEY`, `MONGODB_URI`, `EMAIL_ADDRESS`/`EMAIL_PASSWORD`, optional extra
-`CORS_ORIGINS`, the injected `PORT`, and `TORCH_NUM_THREADS`. The client's production environment
-points at the deployed backend and derives the WebSocket URL from it.
+The system runs in **two parallel deployments** against the same MongoDB Atlas database,
+configured entirely by environment variable (`SECRET_KEY`, `MONGODB_URI`,
+`EMAIL_ADDRESS`/`EMAIL_PASSWORD`, optional extra `CORS_ORIGINS`, the injected `PORT`). The
+**Railway container** is the stable baseline: CPU-only, built from the Dockerfile above,
+auto-deploying on every push, with the client build pointing at it and deriving the WebSocket URL
+from the API URL. The **primary deployment is a Google Compute Engine VM** with an NVIDIA T4
+GPU — provisioned in `europe-central2` (Warsaw) because the Tel Aviv region had no GPU capacity
+at the time, a fact with a measurable cost: roughly 90–100 ms of end-to-end latency is
+Warsaw↔Israel network distance that a local region would remove. The VM runs no container: a
+`systemd` unit runs Uvicorn directly on port 443 with a real Let's Encrypt certificate, obtained
+without purchasing a domain by deriving a hostname from the VM's IP through `nip.io`. It is a
+**single-service architecture** — the same FastAPI process serves the built React client, so
+there is one origin, one port, one certificate and no CORS in production; the client is built in
+a dedicated mode whose empty API URL means "use my own origin". The model weights travel with
+`git clone`, since the deployed checkpoint is committed to the repository; secrets live in a
+gitignored `.env` recreated per machine. A pair of deploy scripts makes an update a one-command
+operation from any teammate's machine: pull, rebuild the client only if it changed, reinstall
+dependencies only if the requirements changed, restart the service. One provisioning lesson is
+worth recording: `pip install torch` installs the CPU-only build by default, and the resulting
+system *works* — at ~200 ms per frame instead of tens of milliseconds, silently. The GPU build must be
+installed explicitly, and "is it actually on the GPU" became a deployment check rather than an
+assumption.
 
 **Device testing requires HTTPS.** `getUserMedia`, `DeviceOrientationEvent` and `geolocation` all
 require a secure context; a phone cannot reach a laptop's `localhost`, and a plain-HTTP LAN
@@ -36,7 +54,7 @@ with three different kinds of answer.
 
 **Quantitative model evaluation** with `model.val()` on held-out splits: Precision and Recall
 overall and per class; **mAP@0.50** as the lenient metric; **mAP@0.50:0.95** as the strict
-model-selection metric used to choose between the three seed runs; **per-class AP** inspected
+model-selection metric used to select the best checkpoint from the run; **per-class AP** inspected
 separately and deliberately, because the mean hides a collapsed rare class; **confusion matrices**
 both normalised and count-based, since the count-based version reveals frequency effects that
 normalisation removes; **precision-, recall- and F1-versus-confidence curves**, used to choose the
@@ -48,13 +66,15 @@ alone does not surface (§3.3.4).
 we were satisfied with the composition of the test split and began evaluating on it, **the
 algorithm configuration was frozen**; hyperparameters, augmentation, thresholds and architecture
 were selected on the *validation* split only. This was adopted specifically because of the
-Stage IV mistake (§3.3.5), where oversampling was applied to the test split and thereby changed
+Stage III mistake (§3.3.4), where oversampling was applied to the test split and thereby changed
 the distribution the comparison was measured against. Repeatedly evaluating on a test set and then
 tuning against the result is leakage: the number stops being an estimate of generalisation and
 becomes an estimate of how much the test set has been memorised through the experimenter. Three
 rules followed: the test split is touched once, at the end; data added later is distributed across
 all three splits; and any change after a test evaluation invalidates it and requires a re-run,
-reported as such.
+reported as such. For Stages II and III that final touch happened and is reported in Table 4.1;
+for the delivered Stage IV model it has not yet happened, which is the book's single largest open
+item (§4.3).
 
 **Qualitative evaluation.** Numbers on a held-out split from the same distribution answer a
 narrower question than they appear to: our test split is drawn from the same academic and
@@ -67,7 +87,7 @@ under occlusion and shadow; and, per the supervisor's instruction from the very 
 genuine generalisation test, and it is where domain shift shows up.
 
 **Systems evaluation** was continuous and in production rather than benchmarked once: per-stage
-latency on both sides (four client, five server stages), round-trip time measured both by pairing
+latency on both sides (four client, six server stages), round-trip time measured both by pairing
 results with send timestamps and independently by the health watchdog, four distinct FPS measures
 (§4.4.2), throughput over a rolling ten-second window, and success and failure counts persisted
 per minute for up to 400 days. Crucially all of it was measured **on the deployment target**, not
@@ -81,5 +101,5 @@ single-tap SOS is the right affordance — is a design argument supported by rea
 empirical finding. There is likewise **no formal safety or clinical validation**: SeeSense is a
 research prototype, not certified and not suitable as a sole navigation aid, designed to
 complement a cane rather than replace one. And there is **no controlled comparison against an
-alternative detector** on the same test split; YOLO11 was selected on architectural and practical
+alternative detector** on the same test split; YOLO26 was selected on architectural and practical
 grounds rather than by a bake-off.

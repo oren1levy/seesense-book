@@ -70,8 +70,8 @@ conflicts to a working operating point, and measuring honestly where that point 
 ## 1.4 Scope and Limitations
 
 **In scope:** a full client → server → model → logic → feedback pipeline over a live camera
-stream at a fixed square resolution; a YOLO-family detector trained by us on our own dataset; a
-FastAPI backend; an accessible mobile-first web client with haptic and audio feedback;
+stream at a fixed square resolution; a YOLO26-small detector trained by us on our own 17-class
+dataset; a FastAPI backend; an accessible mobile-first web client with haptic and audio feedback;
 gyroscope-based alignment gating; multi-object tracking and motion analysis; and the surrounding
 application (auth, settings, history, feedback, emergency contacts, SOS, administration).
 
@@ -82,9 +82,13 @@ heuristic classifying proximity as Close / Medium / Far (§2.5); hard real-time 
 validation with blind participants.
 
 **Known limitations** are collected in §4.8, Chapter 5 and §6.2. The most significant are the
-residual class imbalance (`pole` alone accounts for 453,239 of the dataset's 964,837 boxes), the
-`manhole` class having no validation or test examples at all, the absence of any offline
-capability, and degraded behaviour under motion blur and low light.
+residual class imbalance — `pole` alone accounts for 453,239 of the dataset's 964,837 boxes and is
+simultaneously the weakest class the model measures, at mAP@0.50:0.95 0.128; the `manhole` class
+having no validation or test examples at all, so its accuracy is unmeasured rather than merely
+poor; a **spoken vocabulary narrower than the trained taxonomy**, the server's alert whitelist
+passing 13 of the 17 classes so that `curb`, `manhole`, `trash_can` and `construction` are
+detected but never announced; the absence of any offline capability; and degraded behaviour under
+motion blur and low light.
 
 ## 1.5 Methodology
 
@@ -100,15 +104,18 @@ documentation (Jul–Aug).
 
 Two disciplines imposed by the supervisor cost us time and improved the result. First, **train it
 yourself** — no reuse of an already-trained third-party detector. Second, **freeze the test set**:
-once we were satisfied with the test split and began evaluating on it, the algorithm
-configuration was frozen and no further changes were made on the basis of test results.
+once the split was set aside, no configuration change was ever made on the basis of a test result.
+In the delivered run the discipline held in its strongest form. Every accuracy figure reported in
+Chapter 4 is a **validation** number, over 11,086 images and 180,736 instances, and the
+5,957-image test split remains untouched. That is stated here rather than buried in a footnote,
+because "test" and "validation" are not interchangeable words in a results chapter.
 
 ## 1.6 Organization of the Project Book
 
 **Chapter 2** surveys assistive navigation technology, object detection and the YOLO family,
 tracking, monocular distance estimation, class imbalance, deployment architectures and transport,
 and positions SeeSense against existing systems. **Chapter 3** is the technical core: the
-architecture, the complete data pipeline, the five stages of model development, the server and
+architecture, the complete data pipeline, the four stages of model development, the server and
 client implementations, deployment and evaluation methodology. **Chapter 4** presents results —
 dataset, accuracy, latency, real-time analysis, qualitative behaviour and comparison.
 **Chapter 5** documents the engineering problems we actually hit, with root causes and fixes.
