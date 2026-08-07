@@ -214,9 +214,10 @@ property. Our characterisation specified a CoreML model quantised to 8-bit (15�
 Apple Neural Engine, estimating 80–150 ms inference and 100–180 ms end-to-end. The costs are
 equally real: constrained compute forces a smaller model and lower resolution, and continuous
 camera plus NPU use creates thermal and battery load — our estimate was 3–5 hours of continuous
-operation, which is why a hard start/stop control is a functional requirement. The reference
-project we were given, RoadXpert [46], took this route with TensorFlow.js in the browser,
-reporting 5–10 FPS on mid-range Android and 15–20 FPS on desktops.
+operation, which is why a hard start/stop control is a functional requirement. Browser-based
+on-device detection is feasible today through TensorFlow.js or WebGPU, but published figures for
+that route sit in the range of single-digit to low-twenties frames per second on mid-range mobile
+hardware, an order of magnitude below what an unconstrained server delivers.
 
 **Cloud inference** removes the compute ceiling and centralises model updates, at the cost of
 round-trip latency, bandwidth, a hard connectivity dependency and the privacy implications of
@@ -257,9 +258,12 @@ and remote human assistance by video call. Both are complementary rather than co
 operate on demand with human-scale response times. **Research prototypes** [37], [38] frequently
 combine a camera with depth sensors, an embedded board and a custom haptic vest, reporting strong
 results on custom hardware the user must acquire, wear and maintain — reintroducing the cost and
-adoption barrier that makes guide dogs inaccessible. **RoadXpert** shares our detector family and
-web-delivery philosophy but targets a sighted rider at vehicle speed with a screen in front of
-them, leading to fundamentally different alert semantics.
+adoption barrier that makes guide dogs inaccessible. **Driver- and rider-assistance systems**
+share much of the same stack — a YOLO-family detector, a web or embedded delivery path — but
+target a sighted user at vehicle speed with a screen in front of them, which changes the alert
+semantics fundamentally: a visual overlay is the primary channel, alerts can be triggered by a
+fixed region of interest rather than by tracked motion, and the vocabulary is traffic furniture
+rather than pavement hazards.
 
 The gaps SeeSense addresses: **continuous rather than on-demand** analysis at tens of frames per
 second; a **class taxonomy chosen for a blind pedestrian**, including `curb`, `bollard`,

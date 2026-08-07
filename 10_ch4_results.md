@@ -332,21 +332,22 @@ produces noisy, low-confidence detections.
 | Training required | Weeks | Months, both parties | Minimal | Minimal | **Minimal** |
 | Works offline | Yes | Yes | Yes | Partly | **No** — current limitation |
 
-Against the reference project **RoadXpert**, the comparison is instructive because the stacks
-overlap while the design targets differ. RoadXpert serves a sighted two-wheel rider with
-on-device TensorFlow.js inference at 5–10 FPS on mid-range Android and 15–20 FPS on desktop, no
-network dependency, a visual overlay as the primary channel, region-of-interest alert triggering,
-and 10 traffic-oriented classes (reported P 0.732 / R 0.568 / mAP@0.5 0.641 / mAP@0.5:0.95 0.422).
-SeeSense serves a blind pedestrian with server-side GPU inference at ~50 FPS end-to-end, a
-hard network dependency, speech and haptics as the primary channel, tracked-motion alert
-triggering, and 17 pedestrian-hazard classes over a 91,139-image dataset.
+The sharpest comparison, however, is not with any of those columns but with the alternative
+architecture SeeSense itself rejected. A browser-based on-device detector — the same detector
+family running in TensorFlow.js on the phone — buys independence from the network outright: no
+round trip, no connectivity dependency, and camera frames that never leave the device. It pays
+for that with model capacity and frame rate, since a phone browser cannot run a 9.5 M-parameter
+network at 640 pixels and tens of frames a second. SeeSense made the opposite call, buying
+capacity and frame rate at the cost of a hard network dependency (§2.7).
 
-The two projects made opposite calls on the same trade-off, and both are defensible. RoadXpert
-bought independence from the network at the cost of model capacity and frame rate; SeeSense bought
-capacity and frame rate at the cost of a hard network dependency. For a rider moving at 25 km/h
-through variable coverage, offline operation is arguably worth more; for a pedestrian whose
-hazards need finer discrimination, the larger model and higher frame rate arguably are. The
-correct end state, as both projects note, is the hybrid.
+Both calls are defensible, and which is correct depends on the user rather than on the
+engineering. For someone moving fast through variable coverage, uninterrupted operation is worth
+more than fine discrimination. For a pedestrian at walking pace whose hazards are small,
+low-contrast and easily confused with one another — a kerb against a pavement, a bollard against
+a pole — the larger model and the higher re-assessment rate matter more, and a dropped connection
+is an inconvenience rather than a danger, because the cane is still in their hand. The correct
+end state is the hybrid of §6.3: the server model while the network is good, an on-device model
+when it is not.
 
 ## 4.8 Discussion of Findings
 

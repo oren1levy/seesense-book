@@ -4,7 +4,7 @@ Source of the SeeSense final project book. Project #503, Deep Learning specializ
 College of Management Rishon LeZion. Supervisor: Dr. Moshe Butman.
 
 Team: Oren Levy · Liad Lati · Omer Helfer · Shir Yahav
-Code repository: <https://github.com/oren1levy/SeeSense>
+Code repository: <https://github.com/OmerHelfer/SeeSense>
 
 ---
 
@@ -151,7 +151,7 @@ them rather than silently rewriting it.
 ## Current state
 
 **~26,700 words · 51 A4 pages before figures are inserted.** Adding the twelve figures will take
-it to roughly 57–61 pages. The example book we were given (RoadXpert) is 43 pages.
+it to roughly 57–61 pages.
 
 **What is finished:** the full narrative across all chapters — introduction, literature review,
 architecture, the complete data pipeline, all four model-development stages with their real
