@@ -17,7 +17,7 @@ Rishon LeZion
 
 August 2026
 
-Source code: <https://github.com/oren1levy/SeeSense> [45]
+Source code: <https://github.com/OmerHelfer/SeeSense> [45]
 
 ---
 

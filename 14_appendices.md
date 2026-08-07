@@ -167,5 +167,5 @@ phases — dataset expansion, server engineering, client build — which the ori
 documents do not cover.]]`
 
 **Supervisor:** Dr. Moshe Butman · **Project approver:** Dr. Raz Lin · **Project #503** ·
-Repository: https://github.com/oren1levy/SeeSense · Trello:
+Repository: https://github.com/OmerHelfer/SeeSense · Trello:
 https://trello.com/b/4ii1hYJx/seesense
