@@ -113,7 +113,3 @@ Vibration, DeviceOrientation and Geolocation APIs.
 
 [45] O. Levy, L. Lati, O. Helfer, and S. Yahav, "SeeSense Code Repository," 2026.
 https://github.com/OmerHelfer/SeeSense
-
-[46] N. Forish, I. Elgabsi, I. Hoffman, and R. Edri, "RoadXpert: Real-Time Hazard Detection for
-Two-Wheel Riders," Final Project Book, College of Management, Rishon LeZion, 2025.
-https://github.com/OptimaLPro/RoadXpert

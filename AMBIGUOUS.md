@@ -98,6 +98,9 @@ they are contradictions or open decisions. The book currently takes the position
     just don't screenshot that report cell into the book.
 20. The dataset zip is named `dataSetV26.zip` while the folder is `Data-25-07` — harmless, but
     worth one consistent name if it appears in the book.
-21. The title page used to say `github.com/OmerHelfer/SeeSense` while the README, reference [45]
-    and Appendix D say `github.com/oren1levy/SeeSense`. *Unified to oren1levy* — confirm that is
-    the repo you're submitting.
+21. **Repository URL — RESOLVED, and I had it wrong.** The book (including the original commit)
+    carried `github.com/oren1levy/SeeSense` in four places. The real remote of the code checkout is
+    `github.com/OmerHelfer/SeeSense` (last commit helferomer@gmail.com), so all four are now
+    **OmerHelfer**. Shir had already corrected the title page by hand; I reverted it on a bad
+    majority-vote assumption and then spread the wrong URL. Verify once against GitHub before
+    submitting, since a dead repo link in a project book is an easy mark to lose.
