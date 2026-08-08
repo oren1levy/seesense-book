@@ -15,13 +15,25 @@ cd "$(dirname "$0")"
 
 VENV=".venv"
 
-if [ ! -x "$VENV/bin/python" ]; then
+# macOS/Linux put the interpreter in .venv/bin; Windows (Git Bash) in .venv/Scripts.
+if [ -d "$VENV/Scripts" ]; then
+  PY="$VENV/Scripts/python.exe"
+else
+  PY="$VENV/bin/python"
+fi
+
+if [ ! -x "$PY" ]; then
   echo "First run — creating $VENV and installing 'markdown'..."
-  python3 -m venv "$VENV"
-  "$VENV/bin/pip" install --quiet --upgrade pip
-  "$VENV/bin/pip" install --quiet markdown
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -m venv "$VENV"
+  else
+    python -m venv "$VENV"          # Windows names it just 'python'
+  fi
+  if [ -d "$VENV/Scripts" ]; then PY="$VENV/Scripts/python.exe"; else PY="$VENV/bin/python"; fi
+  "$PY" -m pip install --quiet --upgrade pip
+  "$PY" -m pip install --quiet markdown
   echo "Done."
   echo
 fi
 
-exec "$VENV/bin/python" build_pdf.py "$@"
+exec "$PY" build_pdf.py "$@"

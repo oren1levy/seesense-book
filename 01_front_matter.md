@@ -159,7 +159,8 @@ Parameters · D. Project Timeline and Team Roles
 | 3.4 | Custom ResNet18 detector: training versus validation loss | 3.3 |
 | 3.5 | Sample augmented training batches (mosaic, HSV jitter, scale, flip) | 3.3 |
 | 3.6 | Motion-first alert classification decision tree | 3.4 |
-| 3.7 | Dashboard HUD: brackets, spirit level, detection overlay, alert overlay | 3.5 |
+| 3.7 | Dashboard during an active scan: detections, tracking badge, spirit level, SOS | 3.5 |
+| 3.8 | Settings: menu, sensitivity, alert channel and intensity controls | 3.5 |
 | 4.1 | Training curves for the final YOLO26 run | 4.3 |
 | 4.2 | Normalized confusion matrix on the 17-class validation split | 4.3 |
 | 4.3 | Per-class precision–recall and F1 curves | 4.3 |

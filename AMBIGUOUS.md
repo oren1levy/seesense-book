@@ -20,7 +20,7 @@ they are contradictions or open decisions. The book currently takes the position
     admin UI with live-vs-default display and a level-2 permission gate) both exist. But nothing
     calls `load_stream_config()` at startup, there is no endpoint, the page has no route, and the
     three `adminService` functions it imports were never written. *The book describes it as
-    unfinished scaffolding in §3.4.7, §3.5.10 and §6.3.* Decide before the defense: finish it
+    unfinished scaffolding in §3.4.7, §3.5.8 and §6.3.* Decide before the defense: finish it
     (roughly an hour), or leave it and keep the honest description. Do not describe it as working.
 
 0c. **The GPU server-latency figure is unsettled — three sessions, roughly 2:1 apart.**
@@ -48,7 +48,7 @@ they are contradictions or open decisions. The book currently takes the position
 3. **The red watchdog state no longer stops scanning.** `healthService` says so explicitly; the
    dashboard's disconnect callback only logs. Deliberate, or a regression while rewiring? *Book
    states monitoring-only and lists the stop as unwired.* If you re-wire it, update §2.7, §3.5.7,
-   §3.5.10, Table 5.1, §6.2, §6.3.
+   §3.5.8, Table 5.1, §6.2, §6.3.
 4. **Sustained-danger re-announce every 2 s** (Dashboard) bypasses the `alert_is_new` gate. It
    looks deliberate (an ongoing threat shouldn't fall silent) but it partially contradicts the
    "audio fires only on change" thesis. *Book describes it as a deliberate exception.* Confirm.

@@ -152,20 +152,6 @@ backend — model training, smart alignment, inference pipeline, logic layer; Sp
 full integration — client–server loop, haptic and audio feedback, latency optimisation, edge cases;
 Sprint 4 (15 Mar–1 Apr) stabilisation — field testing, bug fixes, demo video, documentation.
 
-**Division of work**, as assigned in the characterisation and POC planning documents; the team
-worked collaboratively across boundaries, particularly during integration.
-
-| Member | Primary responsibilities |
-|---|---|
-| **Oren Levy** | Characterisation document and screen mockups; monorepo and Git; client application skeleton; model validation; latency optimisation; demo video |
-| **Omer Helfer** | Feasibility and latency study; server environment; model training; server inference pipeline; latency optimisation |
-| **Liad Lati** | Training environment and YOLO configuration; alert-condition logic definition; server logic layer; edge-case handling; documentation lead; submissions |
-| **Shir Yahav** | Dataset search and evaluation against self-captured field images; data collection, filtering, class mapping and preprocessing into unified YOLO format; train/val/test splitting and data-quality validation; gyroscope smart-alignment client logic; client–server connection; feedback implementation; user-experience analysis |
-
-`[[TODO: confirm this division against how the work actually ran, particularly for the later
-phases — dataset expansion, server engineering, client build — which the original planning
-documents do not cover.]]`
-
 **Supervisor:** Dr. Moshe Butman · **Project approver:** Dr. Raz Lin · **Project #503** ·
 Repository: https://github.com/oren1levy/SeeSense · Trello:
 https://trello.com/b/4ii1hYJx/seesense

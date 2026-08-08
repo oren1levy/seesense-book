@@ -159,7 +159,7 @@ GPU VM — rather than downloaded at startup. Deploying a retrained model touche
 must move together or the system will report classes it cannot detect and fail to report classes
 it can: the weights, the server's class list and default high-risk set, the client's Hebrew
 class-name maps, and the settings class grid. The server and client halves were, at the time of
-the code review in §3.5.10, still out of sync with the model — a filtering and labelling defect
+the code review in §3.5.8, still out of sync with the model — a filtering and labelling defect
 rather than a detection defect, but exactly the drift one shared list per side would prevent
 (§6.3).
 

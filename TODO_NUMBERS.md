@@ -42,9 +42,16 @@ Close+Medium=high / Far=low.
 **Done:** 3.1 architecture and frame lifecycle — `figures/fig-3-1-architecture.svg`, placed in
 §3.1. It is a plain SVG, so any text in it can be edited in a text editor; `build_pdf.py` now
 inlines figures automatically, so new ones only need `![alt](figures/name.svg)` in a chapter.
+3.7 dashboard (two panels) and 3.8 settings (two panels) — captured 8 August on the deployed
+system and placed in §3.5.
 
-**To capture:** 3.7 annotated dashboard screenshot mid-detection · 4.5 three real street photos
-with detections + three failure cases (blur, low light, distant object) — **required by meeting 6**.
+**To capture:** 4.5 three real street photos with detections + three failure cases (blur, low
+light, distant object) — **required by meeting 6**.
+
+Optional improvements to 3.7/3.8, decide before submission: (a) the four screenshots include the
+Safari address bar, which shows the deployment IP — crop to the app viewport if that URL should
+not appear in a submitted document; (b) 3.8 stops at the volume/vibration sliders, so the voice
+selector and the high-risk class grid are not shown — one more scrolled capture would complete it.
 
 ## D. Facts to verify
 

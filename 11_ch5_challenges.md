@@ -125,7 +125,7 @@ user navigates by. §4.8 argues this is the project's central design contributio
 | Sensors unusable in development | `getUserMedia`, gyroscope and geolocation require a secure context | ngrok HTTPS tunnel + allowed-hosts entry | Resolved (process cost) |
 | Alert flooding | Alerting on presence; box jitter | 0.8 s trend window, motion-first logic, per-track dedup (§5.4) | Resolved |
 | Over-sensitive health watchdog | Single-reading thresholds, tight values for mobile RTT | Consecutive streaks; announce-once flags; automatic stop on red currently not wired | Partially resolved |
-| Alignment gate fails open | Initial orientation state assumes upright; gyro-less or permission-denied devices never update it | Documented (§3.5.10); fix pending | **Open** |
+| Alignment gate fails open | Initial orientation state assumes upright; gyro-less or permission-denied devices never update it | Documented (§3.5.8); fix pending | **Open** |
 | iOS platform restrictions | Gesture-gated sensor permission; no Vibration API; no background execution | Gesture-gated request; capability detection with honest reporting | Mitigated |
 | Motion blur and low light | Domain shift from clean academic imagery | Quality gates, augmentation, alignment gate | **Open** |
 | Battery and thermal load | Continuous camera, encoding and radio | Start/stop control; capture early-out | Mitigated, unmeasured |

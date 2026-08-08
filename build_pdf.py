@@ -25,6 +25,7 @@ import glob
 import html as html_mod
 import mimetypes
 import os
+import pathlib
 import re
 import shutil
 import subprocess
@@ -131,20 +132,58 @@ img, svg {
   max-width: 100%; height: auto; display: block;
   margin: 10px auto 2px; page-break-inside: avoid;
 }
+/* Phone screenshots. A portrait capture is roughly 0.46 wide-to-tall, so at the
+   full text width one would print taller than a whole A4 page. Constrain them by
+   HEIGHT instead and set each pair side by side — the way two phone screens
+   should read in a printed figure. max-width is only a guard; on these captures
+   the height is what binds, so the aspect ratio is never distorted. */
+.figpair { text-align: center; margin: 11px 0 3px; page-break-inside: avoid; }
+.phone {
+  display: inline-block; max-height: 112mm; width: auto; max-width: 47%;
+  margin: 0 4px; vertical-align: top;
+  border: 1px solid #ccd2da; border-radius: 5px;
+}
 """
 
 
-def read_chapters():
-    parts, missing = [], []
+def read_chapters(allow_missing=False):
+    """Read every chapter in CHAPTER_GLOBS.
+
+    A missing or empty chapter ABORTS the build. It used to be a warning on
+    stderr followed by a successful-looking summary, which meant a deleted
+    chapter produced a PDF that was silently short by a whole section. Pass
+    --allow-missing if you deliberately want a partial draft.
+    """
+    parts, missing, empty = [], [], []
     for name in CHAPTER_GLOBS:
         path = os.path.join(HERE, name)
         if not os.path.exists(path):
             missing.append(name)
             continue
         with open(path, encoding="utf-8") as fh:
-            parts.append(fh.read().rstrip() + "\n")
-    if missing:
-        print("WARNING: missing chapter files: " + ", ".join(missing), file=sys.stderr)
+            text = fh.read().rstrip()
+        if not text:
+            empty.append(name)
+            continue
+        parts.append(text + "\n")
+
+    if missing or empty:
+        for name in missing:
+            print("  MISSING: %s" % name, file=sys.stderr)
+        for name in empty:
+            print("  EMPTY  : %s" % name, file=sys.stderr)
+        if not allow_missing:
+            print(
+                "\nBUILD ABORTED - %d chapter(s) would be omitted from the book.\n"
+                "Restore them (`git checkout -- <file>`) and rebuild, or pass\n"
+                "--allow-missing to build a deliberately partial draft."
+                % (len(missing) + len(empty)),
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print("\nWARNING: building a PARTIAL book - chapters above are omitted.\n",
+              file=sys.stderr)
+
     return "\n\n".join(parts)
 
 
@@ -205,7 +244,7 @@ def main():
     human = now.strftime("%d %B %Y, %H:%M")
     base = os.path.join(BUILD, "SeeSense_Project_Book_%s" % stamp)
 
-    md_text = read_chapters()
+    md_text = read_chapters(allow_missing="--allow-missing" in sys.argv)
     words = len(md_text.split())
     n_todo = len(re.findall(r"\[\[TODO", md_text))
     n_fig = len(re.findall(r"\[\[FIGURE", md_text))
@@ -242,11 +281,20 @@ def main():
 
     chrome = None
     for cand in (
+        # macOS
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
         "/Applications/Chromium.app/Contents/MacOS/Chromium",
         "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        # Windows
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        # Linux / anything on PATH
         shutil.which("google-chrome"),
         shutil.which("chromium"),
+        shutil.which("chrome"),
     ):
         if cand and os.path.exists(cand):
             chrome = cand
@@ -257,7 +305,7 @@ def main():
 
     if not chrome:
         print("\nChrome not found — PDF not generated.")
-        print("Open the HTML in any browser and print to PDF (Cmd-P → Save as PDF).")
+        print("Open the HTML in any browser and print to PDF (Cmd-P / Ctrl-P → Save as PDF).")
         return 0
 
     cmd = [
@@ -265,7 +313,9 @@ def main():
         "--no-pdf-header-footer", "--run-all-compositor-stages-before-draw",
         "--virtual-time-budget=20000",
         "--print-to-pdf=" + base + ".pdf",
-        "file://" + base + ".html",
+        # as_uri() so Windows drive letters and backslashes come out as a legal
+        # file:///C:/... URL; on macOS/Linux it is just "file://" + path.
+        pathlib.Path(base + ".html").as_uri(),
     ]
     res = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     if os.path.exists(base + ".pdf"):

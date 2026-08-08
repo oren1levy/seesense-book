@@ -57,7 +57,17 @@ updating `CHAPTER_GLOBS` in `build_pdf.py`.
 ```
 
 First run creates a local `.venv/` and installs one package (~15 seconds); afterwards it is
-instant. Rendering uses headless Google Chrome, already present on macOS.
+instant. Rendering uses headless Google Chrome or Edge — the builder finds it automatically on
+macOS, Windows and Linux. If no browser is found the HTML is still produced, and you can open it
+and print to PDF by hand.
+
+On Windows run the same command from **Git Bash**, or skip the wrapper entirely:
+
+```powershell
+py -m venv .venv
+.venv\Scripts\python.exe -m pip install markdown
+.venv\Scripts\python.exe build_pdf.py
+```
 
 Output lands in `build/`, stamped with the build date and time so earlier builds are kept:
 
@@ -167,8 +177,9 @@ and real-time analysis, the challenges chapter, conclusions, references and appe
 2. **Server and client per-stage latency numbers** from the admin dashboard, measured on the GPU
    deployment after a stats reset — the current headline figures trace to code comments, not to a
    saved artefact.
-3. **Eleven figures** — four copied straight out of the Ultralytics run directory, three small
-   plots, two diagrams, and the real street photographs required by the final review meeting.
+3. **Nine remaining figures** — four copied straight out of the Ultralytics run directory, three
+   small plots, two diagrams, and the real street photographs required by the final review
+   meeting. The architecture diagram and the four client screenshots are already placed.
    Figure 3.1 is drawn and in place; add the rest as `![alt](figures/name.svg)` and the builder
    inlines them automatically.
 4. **A handful of facts to verify** (the team role split in Appendix D, the `cross` ID-0
